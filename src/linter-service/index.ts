@@ -5,7 +5,6 @@ import { LintResult } from "stylelint";
 import packageJsonContents from "./files-package.json?raw";
 import serverJsContents from "./files-server.js?raw";
 
-const SRC_ROOT = "src/";
 const OUTPUT_JSON_PATH = ".output.json";
 const INPUT_JSON_PATH = ".input.json";
 const META_JSON_PATH = ".meta.json";
@@ -44,9 +43,6 @@ export async function setupLinter(
         contents: "{}",
       },
     },
-    src: {
-      directory: {},
-    },
   });
   notification.append("Installing dependencies...\n");
   const exitCode = await installDependencies(webContainer, (data) => {
@@ -61,15 +57,11 @@ export async function setupLinter(
 
   return {
     async lint(code, config) {
-      await Promise.all([
-        webContainer.fs.writeFile(SRC_ROOT + "target.css", code),
-        webContainer.fs.writeFile(SRC_ROOT + ".stylelintrc.json", config),
-      ]);
-      const result = await lint(webContainer, SRC_ROOT + "target.css");
+      const result = await lint(webContainer, code, config);
       if (result.exit !== 0) {
-        throw new Error("Linting failed");
+        throw new Error("Linting failed: " + result.result);
       }
-      return result.output;
+      return result;
     },
   };
 }
@@ -103,11 +95,17 @@ async function startServer(
 
 let seq = 0;
 
-async function lint(webContainer: WebContainer, target: string) {
+async function lint(webContainer: WebContainer, code: string, config: string) {
   let id = seq++;
   await webContainer.fs.writeFile(
     INPUT_JSON_PATH,
-    JSON.stringify({ id, file: target })
+    JSON.stringify({
+      id,
+      code,
+      fileName: "target.css",
+      config,
+      configFormat: "json",
+    })
   );
   await wait(100);
   let content = JSON.parse(
@@ -123,10 +121,7 @@ async function lint(webContainer: WebContainer, target: string) {
     );
   }
 
-  return {
-    exit: content.exit,
-    output: content,
-  };
+  return content;
 }
 
 function wait(time: number) {

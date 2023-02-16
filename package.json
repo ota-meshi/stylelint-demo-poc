@@ -1,0 +1,31 @@
+{
+  "name": "stylelint-demo-poc",
+  "version": "0.0.0",
+  "description": "Stylelint Online Playground",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ota-meshi/stylelint-demo-poc.git"
+  },
+  "author": "Yosuke Ota (https://github.com/ota-meshi)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ota-meshi/stylelint-demo-poc/issues"
+  },
+  "homepage": "https://github.com/ota-meshi/stylelint-demo-poc#readme",
+  "devDependencies": {
+    "monaco-editor": "^0.35.0",
+    "prettier": "^2.8.4",
+    "stylelint": "^15.1.0",
+    "typescript": "^4.9.5",
+    "vite": "^4.1.1"
+  },
+  "dependencies": {
+    "@webcontainer/api": "^1.0.0"
+  }
+}

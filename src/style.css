@@ -1,0 +1,29 @@
+.main {
+  height: calc(100vh - 180px);
+  display: flex;
+}
+#config {
+  height: 100%;
+  width: 30%;
+  min-width: 1px;
+}
+#code {
+  height: 100%;
+  width: 70%;
+  min-width: 1px;
+}
+
+#notification {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: #000;
+  color: white;
+  opacity: 0.7;
+  height: 100%;
+  height: 100%;
+  width: 100%;
+  padding: 16px;
+  margin: 0;
+}

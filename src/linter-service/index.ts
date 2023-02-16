@@ -1,9 +1,9 @@
-import { WebContainer } from "@webcontainer/api";
+import { FileSystemTree, WebContainer } from "@webcontainer/api";
 import { NotificationPanel } from "../notification";
 import { LintResult } from "stylelint";
 
-import packageJsonContents from "./files-package.json?raw";
-import serverJsContents from "./files-server.js?raw";
+import packageJsonContents from "./server/package.json?raw";
+import serverJsContents from "./server/server.js?raw";
 
 const OUTPUT_JSON_PATH = ".output.json";
 const INPUT_JSON_PATH = ".input.json";
@@ -21,29 +21,27 @@ export interface Linter {
 export async function setupLinter(
   notification: NotificationPanel
 ): Promise<Linter> {
+  notification.append("Starting WebContainer...\n");
+
   const webContainer = await WebContainer.boot();
-  await webContainer.mount({
-    "server.js": {
+  const serverFiles: FileSystemTree = {};
+  for (const [file, contents] of Object.entries(
+    import.meta.glob("./server/**/*.{js,json}", { as: "raw" })
+  ).map(([file, load]) => {
+    return [
+      file.slice(9).replace(/^_/, "."),
+      load() as Promise<string>,
+    ] as const;
+  })) {
+    serverFiles[file] = {
       file: {
-        contents: serverJsContents,
+        contents: await contents,
       },
-    },
-    "package.json": {
-      file: {
-        contents: packageJsonContents,
-      },
-    },
-    [INPUT_JSON_PATH]: {
-      file: {
-        contents: "{}",
-      },
-    },
-    [OUTPUT_JSON_PATH]: {
-      file: {
-        contents: "{}",
-      },
-    },
-  });
+    };
+  }
+  console.log("Server files:", serverFiles);
+  await webContainer.mount(serverFiles);
+
   notification.append("Installing dependencies...\n");
   const exitCode = await installDependencies(webContainer, (data) => {
     notification.append(data);

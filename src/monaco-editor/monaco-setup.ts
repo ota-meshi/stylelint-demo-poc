@@ -111,7 +111,7 @@ export async function setupMonacoEditor({
       ...options,
     });
     const original = monaco.editor.createModel(init.value, language);
-    const modified = monaco.editor.createModel("", language);
+    const modified = monaco.editor.createModel(init.value, language);
 
     const leftEditor = diffEditor.getOriginalEditor();
     const rightEditor = diffEditor.getModifiedEditor();

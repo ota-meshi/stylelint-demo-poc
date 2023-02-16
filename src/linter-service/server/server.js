@@ -2,6 +2,10 @@
  * The server will monitor the .input.json file for changes
  * and read the JSON and linting the target file if there are any changes.
  * The linting result is written to the .output.json file.
+ *
+ * FIXME:
+ * Normally, it would make more sense to use stdout/stdin than via a file,
+ * but I couldn't figure out how to do it well.
  */
 import stylelint from "stylelint";
 import chokidar from "chokidar";

@@ -2,9 +2,6 @@ import { FileSystemTree, WebContainer } from "@webcontainer/api";
 import { NotificationPanel } from "../notification";
 import { LintResult } from "stylelint";
 
-import packageJsonContents from "./server/package.json?raw";
-import serverJsContents from "./server/server.js?raw";
-
 const OUTPUT_JSON_PATH = ".output.json";
 const INPUT_JSON_PATH = ".input.json";
 const META_JSON_PATH = ".meta.json";

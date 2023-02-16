@@ -2,9 +2,10 @@
   "name": "example-app",
   "type": "module",
   "dependencies": {
-    "stylelint": "^15.0.0"
+    "stylelint": "^15.0.0",
+    "chokidar": "latest"
   },
   "scripts": {
-    "lint-exec": "node ./index.js"
+    "start": "node ./server.js"
   }
 }

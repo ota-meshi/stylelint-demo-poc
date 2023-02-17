@@ -8,7 +8,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "stylelint": "^15.0.0"
+    "stylelint": "^15.1.0",
+    "stylelint-config-recommended": "^10.0.1",
+    "stylelint-config-standard": "^30.0.1"
   },
   "scripts": {
     "start": "node ./server.js"

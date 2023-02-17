@@ -109,12 +109,12 @@ async function startServer(
   notification.append("\nStarting server...\n");
   const serverProcess = await webContainer.spawn("npm", ["run", "start"]);
   const writer = serverProcess.input.getWriter();
-  let callbackJson: ((json: string) => void) | null = null;
+  let callbacks: ((json: string) => void)[] = [];
   serverProcess.output.pipeTo(
     new WritableStream({
       write(str) {
         if (
-          !callbackJson ||
+          !callbacks.length ||
           !str.startsWith(DIRECTIVE_OPEN) ||
           !str.endsWith(DIRECTIVE_CLOSE)
         )
@@ -122,7 +122,7 @@ async function startServer(
         const output = JSON.parse(
           str.slice(DIRECTIVE_OPEN.length, -DIRECTIVE_CLOSE.length)
         );
-        callbackJson(output);
+        callbacks.forEach((f) => f(output));
       },
     })
   );
@@ -131,12 +131,14 @@ async function startServer(
     request: async (data, test) => {
       writer.write(DIRECTIVE_OPEN + JSON.stringify(data) + DIRECTIVE_CLOSE);
       return new Promise((resolve) => {
-        callbackJson = (output) => {
+        const callback = (output: string) => {
           if (test(output)) {
-            callbackJson = null;
+            const i = callbacks.indexOf(callback);
+            if (i > 0) callbacks.splice(i);
             resolve(output);
           }
         };
+        callbacks.push(callback);
       });
     },
   };

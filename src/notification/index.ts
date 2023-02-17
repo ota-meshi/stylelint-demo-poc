@@ -23,7 +23,6 @@ export function setupNotificationPanel({
               lastLinefeed + 1
             );
         }
-        console.log(match[0]);
         rootElement.textContent += string.slice(start, match.index!);
         start = match.index! + match[0].length;
       }

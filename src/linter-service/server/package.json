@@ -1,9 +1,14 @@
 {
-  "name": "example-app",
+  "name": "stylelint-demo-server",
+  "description": "Stylelint Online Playground",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ota-meshi/stylelint-demo-poc.git"
+  },
+  "license": "MIT",
   "dependencies": {
-    "stylelint": "^15.0.0",
-    "chokidar": "latest"
+    "stylelint": "^15.0.0"
   },
   "scripts": {
     "start": "node ./server.js"

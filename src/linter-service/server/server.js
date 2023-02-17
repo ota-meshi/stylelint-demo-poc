@@ -1,22 +1,19 @@
 /**
- * The server will monitor the .input.json file for changes
- * and read the JSON and linting the target file if there are any changes.
- * The linting result is written to the .output.json file.
+ * The server waits for stdin, and when stdin is received,
+ * it starts linting based on that information.
+ * The linting result is written to stdout.
  *
- * FIXME:
- * Normally, it would make more sense to use stdout/stdin than via a file,
- * but I couldn't figure out how to do it well.
+ * Always pass data with a directive open prefix and a directive close suffix.
  */
 import stylelint from "stylelint";
-import chokidar from "chokidar";
 import fs from "fs";
 import path from "path";
 
 const rootDir = path.resolve();
 const SRC_DIR = path.join(rootDir, "src");
-const OUTPUT_JSON_PATH = path.join(rootDir, ".output.json");
-const INPUT_JSON_PATH = path.join(rootDir, ".input.json");
-const META_JSON_PATH = path.join(rootDir, ".meta.json");
+
+const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
+const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
 
 /**
  * @typedef {object} LintInput
@@ -27,14 +24,31 @@ const META_JSON_PATH = path.join(rootDir, ".meta.json");
  * @property {'json'} configFormat
  */
 
-watch();
+main();
 
-function watch() {
-  console.log("Start watch file: ", INPUT_JSON_PATH);
+function main() {
+  console.log("Start server");
+
+  process.stdin.setEncoding("utf8");
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
 
   let processing, next;
-  chokidar.watch(INPUT_JSON_PATH).on("change", async () => {
-    const input = JSON.parse(fs.readFileSync(INPUT_JSON_PATH, "utf8"));
+  process.stdin.on("data", (data) => {
+    const str = data.toString();
+    if (!str.startsWith(DIRECTIVE_OPEN) || !str.endsWith(DIRECTIVE_CLOSE))
+      return;
+    const input = JSON.parse(
+      str.slice(DIRECTIVE_OPEN.length, -DIRECTIVE_CLOSE.length)
+    );
+    // Health check.
+    if (input === "ok?") {
+      process.stdout.write(
+        DIRECTIVE_OPEN + JSON.stringify("ok") + DIRECTIVE_CLOSE
+      );
+      return;
+    }
+    // Request linting.
     if (!processing) {
       processing = lint(input).then(() => {
         // When finished, run the waiting lint.
@@ -45,7 +59,11 @@ function watch() {
       next = () => lint(input);
     }
   });
-  fs.writeFileSync(META_JSON_PATH, JSON.stringify({ boot: true }));
+
+  // Notify the start of boot.
+  process.stdout.write(
+    DIRECTIVE_OPEN + JSON.stringify("boot") + DIRECTIVE_CLOSE
+  );
 }
 /**
  * Linting with stylelint
@@ -79,8 +97,10 @@ async function lint(input) {
       fixResult: fixResult.results[0],
       output: fixedFile,
     };
-    // Write the linting result to the output file.
-    fs.writeFileSync(OUTPUT_JSON_PATH, JSON.stringify(output));
+    // Write the linting result to the stdout.
+    process.stdout.write(
+      DIRECTIVE_OPEN + JSON.stringify(output) + DIRECTIVE_CLOSE
+    );
   } catch (e) {
     console.error(e);
     const output = {
@@ -88,6 +108,8 @@ async function lint(input) {
       exit: 1,
       result: e.message,
     };
-    fs.writeFileSync(OUTPUT_JSON_PATH, JSON.stringify(output));
+    process.stdout.write(
+      DIRECTIVE_OPEN + JSON.stringify(output) + DIRECTIVE_CLOSE
+    );
   }
 }

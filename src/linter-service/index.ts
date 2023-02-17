@@ -1,10 +1,13 @@
-import { FileSystemTree, WebContainer } from "@webcontainer/api";
+import {
+  FileSystemTree,
+  WebContainer,
+  WebContainerProcess,
+} from "@webcontainer/api";
 import { NotificationPanel } from "../notification";
-import { LintResult } from "stylelint";
+import type { LintResult } from "stylelint";
 
-const OUTPUT_JSON_PATH = ".output.json";
-const INPUT_JSON_PATH = ".input.json";
-const META_JSON_PATH = ".meta.json";
+const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
+const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
 
 export type LinterServiceResult = {
   result: LintResult;
@@ -48,11 +51,11 @@ export async function setupLinter(
     throw new Error("Installation failed");
   }
 
-  await startServer(webContainer, notification);
+  const server = await startServer(webContainer, notification);
 
   return {
     async lint(code, config) {
-      const result = await lint(webContainer, code, config);
+      const result = await lint(server, code, config);
       if (result.exit !== 0) {
         throw new Error("Linting failed: " + result.result);
       }
@@ -76,49 +79,71 @@ async function installDependencies(
   return installProcess.exit;
 }
 
+type Server = {
+  process: WebContainerProcess;
+  request: (data: any, test: (res: any) => boolean) => Promise<any>;
+};
+
 async function startServer(
   webContainer: WebContainer,
   notification: NotificationPanel
-) {
+): Promise<Server> {
   notification.append("\nStarting server...\n");
-  await webContainer.spawn("npm", ["run", "start"]);
-  await wait(100);
-  while (!(await webContainer.fs.readdir("/")).includes(META_JSON_PATH)) {
-    await wait(100);
-  }
+  const serverProcess = await webContainer.spawn("npm", ["run", "start"]);
+  const writer = serverProcess.input.getWriter();
+  let callbackJson: ((json: string) => void) | null = null;
+  serverProcess.output.pipeTo(
+    new WritableStream({
+      write(str) {
+        if (
+          !callbackJson ||
+          !str.startsWith(DIRECTIVE_OPEN) ||
+          !str.endsWith(DIRECTIVE_CLOSE)
+        )
+          return;
+        const output = JSON.parse(
+          str.slice(DIRECTIVE_OPEN.length, -DIRECTIVE_CLOSE.length)
+        );
+        callbackJson(output);
+      },
+    })
+  );
+  const server: Server = {
+    process: serverProcess,
+    request: async (data, test) => {
+      writer.write(DIRECTIVE_OPEN + JSON.stringify(data) + DIRECTIVE_CLOSE);
+      return new Promise((resolve) => {
+        callbackJson = (output) => {
+          if (test(output)) {
+            callbackJson = null;
+            resolve(output);
+          }
+        };
+      });
+    },
+  };
+
+  await server.request("ok?", (res) => res === "ok" || res === "boot");
+  return server;
 }
 
 let seq = 0;
 
-async function lint(webContainer: WebContainer, code: string, config: string) {
+async function lint(server: Server, code: string, config: string) {
   let id = seq++;
-  await webContainer.fs.writeFile(
-    INPUT_JSON_PATH,
-    JSON.stringify({
+  const content = await server.request(
+    {
       id,
       code,
       fileName: "target.css",
       config,
       configFormat: "json",
-    })
+    },
+    (content) => content.id >= id
   );
-  await wait(100);
-  let content = JSON.parse(
-    await webContainer.fs.readFile(OUTPUT_JSON_PATH, "utf8")
-  );
-  while (content.id !== id) {
-    if (content.id > id) {
-      throw new Error("Overtaken by the next linting");
-    }
-    await wait(100);
-    content = JSON.parse(
-      await webContainer.fs.readFile(OUTPUT_JSON_PATH, "utf8")
-    );
+  if (content.id > id) {
+    throw new Error("Overtaken by the next linting");
   }
 
   return content;
-}
-
-function wait(time: number) {
-  return new Promise((resolve) => setTimeout(resolve, time));
 }

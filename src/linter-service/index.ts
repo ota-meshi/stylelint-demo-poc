@@ -5,9 +5,7 @@ import {
 } from "@webcontainer/api";
 import { NotificationPanel } from "../notification";
 import type { LintResult } from "stylelint";
-
-const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
-const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
+import { createJsonPayload, extractJson } from "./server/extract-json";
 
 export type LinterServiceResult =
   | LinterServiceResultSuccess
@@ -43,6 +41,7 @@ export interface Linter {
 export async function setupLinter(
   notification: NotificationPanel
 ): Promise<Linter> {
+  notification.begin();
   notification.append("Starting WebContainer...\n");
 
   const webContainer = await WebContainer.boot();
@@ -75,9 +74,37 @@ export async function setupLinter(
 
   const server = await startServer(webContainer, notification);
 
+  notification.end();
+
+  let processing: Promise<void> | null = null;
+  let next: (() => Promise<LinterServiceResult>) | null = null;
+  let last: Promise<LinterServiceResult> | null = null;
+  async function setLintProcess(
+    run: () => Promise<LinterServiceResult>
+  ): Promise<LinterServiceResult> {
+    if (processing) {
+      next = run;
+      while (processing) {
+        await processing;
+      }
+      return last!;
+    }
+    const promise = run();
+    processing = promise.then(() => {
+      processing = null;
+      if (next) {
+        setLintProcess(next);
+        next = null;
+      }
+    });
+    last = promise;
+    return promise;
+  }
+
   return {
     async lint(version, code, config) {
-      return lint(server, version, code, config);
+      // Returns the result of the last linting process.
+      return setLintProcess(() => lint(server, version, code, config));
     },
   };
 }
@@ -98,53 +125,96 @@ async function installDependencies(
 }
 
 type Server = {
-  process: WebContainerProcess;
+  _process: WebContainerProcess;
   request: (data: any, test: (res: any) => boolean) => Promise<any>;
+  restart: () => Promise<void>;
 };
 
 async function startServer(
   webContainer: WebContainer,
   notification: NotificationPanel
 ): Promise<Server> {
-  notification.append("\nStarting server...\n");
-  const serverProcess = await webContainer.spawn("npm", ["run", "start"]);
-  const writer = serverProcess.input.getWriter();
-  let callbacks: ((json: string) => void)[] = [];
-  serverProcess.output.pipeTo(
-    new WritableStream({
-      write(str) {
-        if (
-          !callbacks.length ||
-          !str.startsWith(DIRECTIVE_OPEN) ||
-          !str.endsWith(DIRECTIVE_CLOSE)
-        )
-          return;
-        const output = JSON.parse(
-          str.slice(DIRECTIVE_OPEN.length, -DIRECTIVE_CLOSE.length)
-        );
-        callbacks.forEach((f) => f(output));
-      },
-    })
-  );
-  const server: Server = {
-    process: serverProcess,
-    request: async (data, test) => {
-      writer.write(DIRECTIVE_OPEN + JSON.stringify(data) + DIRECTIVE_CLOSE);
-      return new Promise((resolve) => {
-        const callback = (output: string) => {
-          if (test(output)) {
-            const i = callbacks.indexOf(callback);
-            if (i > 0) callbacks.splice(i);
-            resolve(output);
-          }
-        };
-        callbacks.push(callback);
-      });
+  let server = await startServerInternal();
+
+  let waitPromise = Promise.resolve(undefined as any);
+  function restart() {
+    return (waitPromise = waitPromise.then(async () => {
+      server.process.kill();
+      await server.process.exit;
+      server = await startServerInternal("Restarting server...");
+    }));
+  }
+  return {
+    get _process() {
+      return server.process;
     },
+    async request(data, test) {
+      return (waitPromise = waitPromise.then(async () => {
+        while (server.isExit) {
+          await restart();
+        }
+        return server.request(data, test);
+      }));
+    },
+    restart,
   };
 
-  await server.request("ok?", (res) => res === "ok" || res === "boot");
-  return server;
+  async function startServerInternal(message: string = "Starting server...") {
+    notification.begin();
+    notification.append("\n" + message + "\n");
+    const serverProcess = await webContainer.spawn("npm", ["run", "start"]);
+
+    let boot = false;
+    let callbacks: ((json: string) => void)[] = [];
+    serverProcess.output.pipeTo(
+      new WritableStream({
+        write(str) {
+          if (!callbacks.length) {
+            if (!boot) console.log(str);
+            return;
+          }
+          const output = extractJson(str);
+          if (!output) {
+            if (!boot) console.log(str);
+            return;
+          }
+          callbacks.forEach((f) => f(output));
+        },
+      })
+    );
+
+    const writer = serverProcess.input.getWriter();
+    const serverInternal = {
+      process: serverProcess,
+      request: async (data: any, test: (data: any) => boolean) => {
+        writer.write(createJsonPayload(data));
+        return new Promise((resolve) => {
+          const callback = (output: string) => {
+            if (test(output)) {
+              const i = callbacks.indexOf(callback);
+              if (i > 0) callbacks.splice(i);
+              resolve(output);
+            }
+          };
+          callbacks.push(callback);
+        });
+      },
+      isExit: false,
+    };
+    serverProcess.exit.then((_exitCode) => {
+      serverInternal.isExit = true;
+    });
+
+    await serverInternal.request(
+      "ok?",
+      (res) => res === "ok" || res === "boot"
+    );
+    boot = true;
+
+    notification.end();
+
+    return serverInternal;
+  }
 }
 
 async function lint(

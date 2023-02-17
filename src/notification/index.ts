@@ -1,7 +1,8 @@
 import ansiRegex from "ansi-regex";
 export type NotificationPanel = {
-  hide(): unknown;
-  append(string: string): unknown;
+  begin(): void;
+  end(): void;
+  append(string: string): void;
 };
 const CHA = "\u001b[1G";
 export function setupNotificationPanel({
@@ -9,6 +10,7 @@ export function setupNotificationPanel({
 }: {
   rootElement: HTMLElement;
 }): NotificationPanel {
+  let beginStack = 0;
   return {
     append: (string: string) => {
       const ansiRe = ansiRegex();
@@ -27,8 +29,20 @@ export function setupNotificationPanel({
       }
       rootElement.textContent += string.slice(start);
     },
-    hide() {
-      rootElement.style.display = "none";
+    begin() {
+      if (beginStack === 0) {
+        rootElement.textContent = "";
+      }
+      beginStack++;
+      if (beginStack > 0) {
+        rootElement.style.display = "";
+      }
+    },
+    end() {
+      beginStack = Math.max(beginStack - 1, 0);
+      if (beginStack === 0) {
+        rootElement.style.display = "none";
+      }
     },
   };
 }

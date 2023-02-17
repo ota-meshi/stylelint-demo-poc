@@ -14,6 +14,7 @@ async function main() {
   const notification = setupNotificationPanel({
     rootElement: document.querySelector<HTMLDivElement>("#notification")!,
   });
+  notification.begin();
   const [codeEditor, configEditor, resultPanel, linter] = await Promise.all([
     setupCodeEditor({
       rootElement: document.querySelector<HTMLDivElement>("#code")!,
@@ -37,8 +38,7 @@ async function main() {
     setupLinter(notification),
   ]);
   const monaco = await loadMonacoEditor();
-
-  notification.hide();
+  notification.end();
 
   let seq = 0;
 

@@ -8,12 +8,10 @@
 import stylelint from "stylelint";
 import fs from "fs";
 import path from "path";
+import { createJsonPayload, extractJson } from "./extract-json.js";
 
 const rootDir = path.resolve();
 const SRC_DIR = path.join(rootDir, "src");
-
-const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
-const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
 
 /**
  * @typedef {import('../index').LintInput} LintInput
@@ -29,37 +27,20 @@ function main() {
   process.stdin.setRawMode(true);
   process.stdin.resume();
 
-  let processing, next;
   process.stdin.on("data", (data) => {
-    const str = data.toString();
-    if (!str.startsWith(DIRECTIVE_OPEN) || !str.endsWith(DIRECTIVE_CLOSE))
-      return;
-    const input = JSON.parse(
-      str.slice(DIRECTIVE_OPEN.length, -DIRECTIVE_CLOSE.length)
-    );
+    const input = extractJson(data.toString());
+    if (!input) return;
     // Health check.
     if (input === "ok?") {
-      process.stdout.write(
-        DIRECTIVE_OPEN + JSON.stringify("ok") + DIRECTIVE_CLOSE
-      );
+      process.stdout.write(createJsonPayload("ok"));
       return;
     }
     // Request linting.
-    if (!processing) {
-      processing = lint(input).then(() => {
-        // When finished, run the waiting lint.
-        processing = next?.();
-      });
-    } else {
-      // Waits for lint if previous lint is processing.
-      next = () => lint(input);
-    }
+    lint(input);
   });
 
   // Notify the start of boot.
-  process.stdout.write(
-    DIRECTIVE_OPEN + JSON.stringify("boot") + DIRECTIVE_CLOSE
-  );
+  process.stdout.write(createJsonPayload("boot"));
 }
 /**
  * Linting with stylelint
@@ -95,19 +76,15 @@ async function lint(input) {
       output: fixedFile,
     };
     // Write the linting result to the stdout.
-    process.stdout.write(
-      DIRECTIVE_OPEN + JSON.stringify(output) + DIRECTIVE_CLOSE
-    );
+    process.stdout.write(createJsonPayload(output));
   } catch (e) {
     console.error(e);
     /** @type {LinterServiceResult} */
     const output = {
       version: input.version,
       exit: 1,
-      result: e.message,
+      result: /** @type {any} */ (e).message,
     };
-    process.stdout.write(
-      DIRECTIVE_OPEN + JSON.stringify(output) + DIRECTIVE_CLOSE
-    );
+    process.stdout.write(createJsonPayload(output));
   }
 }

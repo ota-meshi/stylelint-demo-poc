@@ -9,13 +9,35 @@ import type { LintResult } from "stylelint";
 const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
 const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
 
-export type LinterServiceResult = {
+export type LinterServiceResult =
+  | LinterServiceResultSuccess
+  | LinterServiceResultError;
+export type LinterServiceResultSuccess = {
+  version: number;
+  exit: 0;
   result: LintResult;
   fixResult: LintResult;
   output: string;
 };
+export type LinterServiceResultError = {
+  version: number;
+  exit: 1;
+  result: string;
+};
+export type LintInput = {
+  version: number;
+  code: string;
+  fileName: string;
+  config: string;
+  configFormat: "json";
+};
+
 export interface Linter {
-  lint: (code: string, config: string) => Promise<LinterServiceResult>;
+  lint: (
+    version: number,
+    code: string,
+    config: string
+  ) => Promise<LinterServiceResult>;
 }
 
 export async function setupLinter(
@@ -54,12 +76,8 @@ export async function setupLinter(
   const server = await startServer(webContainer, notification);
 
   return {
-    async lint(code, config) {
-      const result = await lint(server, code, config);
-      if (result.exit !== 0) {
-        throw new Error("Linting failed: " + result.result);
-      }
-      return result;
+    async lint(version, code, config) {
+      return lint(server, version, code, config);
     },
   };
 }
@@ -127,23 +145,22 @@ async function startServer(
   return server;
 }
 
-let seq = 0;
-
-async function lint(server: Server, code: string, config: string) {
-  let id = seq++;
+async function lint(
+  server: Server,
+  version: number,
+  code: string,
+  config: string
+) {
   const content = await server.request(
     {
-      id,
+      version,
       code,
       fileName: "target.css",
       config,
       configFormat: "json",
-    },
-    (content) => content.id >= id
+    } as LintInput,
+    (content) => content.version >= version
   );
-  if (content.id > id) {
-    throw new Error("Overtaken by the next linting");
-  }
 
   return content;
 }

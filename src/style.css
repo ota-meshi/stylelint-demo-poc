@@ -12,6 +12,9 @@
   width: 70%;
   min-width: 1px;
 }
+#result {
+  white-space: pre;
+}
 
 #notification {
   position: fixed;

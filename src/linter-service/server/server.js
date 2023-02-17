@@ -16,12 +16,8 @@ const DIRECTIVE_OPEN = "{{{stylelint-json-start}}}";
 const DIRECTIVE_CLOSE = "{{{stylelint-json-end}}}";
 
 /**
- * @typedef {object} LintInput
- * @property {string} id
- * @property {string} code
- * @property {string} fileName
- * @property {string} config
- * @property {'json'} configFormat
+ * @typedef {import('../index').LintInput} LintInput
+ * @typedef {import('../index').LinterServiceResult} LinterServiceResult
  */
 
 main();
@@ -90,8 +86,9 @@ async function lint(input) {
     const fixResult = await stylelint.lint({ files: [targetFile], fix: true });
     const fixedFile = fs.readFileSync(targetFile, "utf8");
 
+    /** @type {LinterServiceResult} */
     const output = {
-      id: input.id,
+      version: input.version,
       exit: 0,
       result: result.results[0],
       fixResult: fixResult.results[0],
@@ -103,8 +100,9 @@ async function lint(input) {
     );
   } catch (e) {
     console.error(e);
+    /** @type {LinterServiceResult} */
     const output = {
-      id: input.id,
+      version: input.version,
       exit: 1,
       result: e.message,
     };

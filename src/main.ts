@@ -40,14 +40,25 @@ async function main() {
 
   notification.hide();
 
+  let seq = 0;
+
   lint(codeEditor.getLeftValue(), configEditor.getValue());
 
   async function lint(code: string, config: string) {
+    const version = seq++;
     codeEditor.setRightValue(code);
     codeEditor.setLeftMarkers([]);
     codeEditor.setRightMarkers([]);
-    const result = await linter.lint(code, config);
+    const result = await linter.lint(version, code, config);
+    if (result.version > version) {
+      // Overtaken by the next linting
+      return;
+    }
     resultPanel.setResult(result);
+
+    if (result.exit !== 0) {
+      return;
+    }
 
     codeEditor.setLeftMarkers(result.result.warnings.map(messageToMarker));
     codeEditor.setRightMarkers(result.fixResult.warnings.map(messageToMarker));

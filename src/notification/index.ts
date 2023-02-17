@@ -1,5 +1,4 @@
 import ansiRegex from "ansi-regex";
-const ansiRe = ansiRegex();
 export type NotificationPanel = {
   hide(): unknown;
   append(string: string): unknown;
@@ -12,8 +11,8 @@ export function setupNotificationPanel({
 }): NotificationPanel {
   return {
     append: (string: string) => {
+      const ansiRe = ansiRegex();
       let start = 0;
-
       for (const match of string.matchAll(ansiRe)) {
         if (match[0] === CHA) {
           const lastLinefeed = rootElement.textContent!.lastIndexOf("\n");
